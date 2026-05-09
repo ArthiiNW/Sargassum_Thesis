@@ -1,31 +1,32 @@
 library(ncdf4)
-fai_max<-nc_open("dataset-sargassum-cls-merged-msi-oli-global-lr.nc")
-print(fai_max)
+
+fai<-nc_open("data/min_FAI_2020-26.nc")
+print(fai)
 
 
-lon <- ncvar_get(fai_max,"longitude")
+lon <- ncvar_get(fai,"longitude")
 nlon <- dim(lon)
 head(lon)
 
-lat <- ncvar_get(fai_max,"latitude")
+lat <- ncvar_get(fai,"latitude")
 nlat <- dim(lat)
 head(lat)
 
-time <- ncvar_get(fai_max,"time")
-tunits <- ncatt_get(fai_max,"time","units")
+time <- ncvar_get(fai,"time")
+tunits <- ncatt_get(fai,"time","units")
 nt <- dim(time)
 
-fai_array<-ncvar_get(fai_max,"nfai_max")
-longname<- ncatt_get(fai_max, "nfai_max", "long_name")
-dunits<-ncatt_get(fai_max, "nfai_max", "units")
-fillvalue<-ncatt_get(fai_max, "nfai_max", "FillValue")
+fai_array<-ncvar_get(fai,"nfai_min")
+longname<- ncatt_get(fai, "nfai_min", "long_name")
+dunits<-ncatt_get(fai, "nfai_min", "units")
+fillvalue<-ncatt_get(fai, "nfai_min", "FillValue")
 
-title <- ncatt_get(fai_max,0,"title")
-institution <- ncatt_get(fai_max,0,"institution")
-datasource <- ncatt_get(fai_max,0,"source")
-references <- ncatt_get(fai_max,0,"references")
-history <- ncatt_get(fai_max,0,"history")
-Conventions <- ncatt_get(fai_max,0,"Conventions")
+title <- ncatt_get(fai,0,"title")
+institution <- ncatt_get(fai,0,"institution")
+datasource <- ncatt_get(fai,0,"source")
+references <- ncatt_get(fai,0,"references")
+history <- ncatt_get(fai,0,"history")
+Conventions <- ncatt_get(fai,0,"Conventions")
 
 
 library(lattice)
@@ -41,4 +42,19 @@ time_cf
 class(time_cf)
 
 fai_array[fai_array==fillvalue$value] <- NA
-length(na.omit(as.vector(fai_array[,,1])))
+
+n_time <- fai$dim$time$len
+
+max_fai     <- numeric(n_time)
+n_positive  <- numeric(n_time)
+
+for (t in seq_len(n_time)) {
+  slice <- ncvar_get(fai, "nfai_min",
+                     start = c(1, 1, t),
+                     count = c(-1, -1, 1))
+  max_fai[t]    <- suppressWarnings(max(slice, na.rm = TRUE))
+  n_positive[t] <- sum(slice > 0, na.rm = TRUE)
+}
+nc_close(fai)
+
+image(lon,lat,fai_slice, col=rev(brewer.pal(10,"RdBu")))
