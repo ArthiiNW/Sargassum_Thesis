@@ -3,11 +3,7 @@ library(terra)
 library(sf)
 library(geodata)
 
-# Let's also look at Aruba, which is known to have minimum
-# Sargassum influx
-
-
-nc_path     <- "data/Aruba_5km.nc" 
+nc_path     <- "data/Bonaire_5km.nc" 
 varname_fai <- "nfai_max_isolated"
 varname_obs <- "nfai_max_missing"
 nc <- nc_open(nc_path)
@@ -18,45 +14,47 @@ nc_close(nc)
 
 cat("lon: ", length(lon), " from ", min(lon), " to ", max(lon), "\n")
 cat("lat: ", length(lat), " from ", min(lat), " to ", max(lat), "\n")
+# Sanity check: Bonaire is around lon -68.4 to -68.2, lat 12.0 to 12.3
 # Sanity check passed
 
 # .　 . • ☆ . ° .• °:. *₊ ° . ☆MAP.　 . • ☆ . ° .• °:. *₊ ° . ☆
 
 # --- Get Bonaire polygon from GADM ---
-Aruba <- gadm(country = "ABW", level = 0, path = tempdir())
-plot(Aruba)  # quick visual check
+# "BES" returns Bonaire + Sint Eustatius + Saba; filter to Bonaire only
+bes <- gadm(country = "BES", level = 1, path = tempdir())
+bonaire <- bes[bes$NAME_1 == "Bonaire", ]
+plot(bonaire)  # quick visual check
 
 # --- Build 1 km seaward buffer in a metric CRS (UTM 19N) ---
 utm <- "EPSG:32619"
-Aruba_utm <- project(Aruba, utm)
-buffer_utm  <- buffer(Aruba_utm, width = 1000)   # 1 km outward
-seaward_utm <- erase(buffer_utm, Aruba_utm)      # ring only, drops land
+bonaire_utm <- project(bonaire, utm)
+buffer_utm  <- buffer(bonaire_utm, width = 1000)   # 1 km outward
+seaward_utm <- erase(buffer_utm, bonaire_utm)      # ring only, drops land
 seaward     <- project(seaward_utm, "EPSG:4326")
 
-# --- Clip Aruba buffer to east (windward) coast only ---
+# --- Clip the buffer to east of a piecewise line along the west coast ---
+# Define cut points from north to south, picking lon values that sit
+# just west of the actual coastline at each latitude.
 cut_pts <- data.frame(
-  lat = c(12.542, 12.500, 12.450, 12.420),
-  lon = c(-70.064, -69.970, -69.910, -69.870)
-  # NW tip → SE tip, roughly along the central spine
+  lat = c(12.312, 12.250, 12.180, 12.100, 12.022),
+  lon = c(-68.387, -68.380, -68.279, -68.270, -68.250)
+  # ^ adjust the middle lon values until the line clears the west coast
 )
 
-# Extrapolate cut line at both ends so it clears the buffer extent
-lat_top    <- 12.70    # north of NW tip + buffer
-lat_bottom <- 12.38    # south of SE tip + buffer
-slope_top    <- (cut_pts$lon[2] - cut_pts$lon[1]) /
-  (cut_pts$lat[2] - cut_pts$lat[1])
+# Extrapolate top and bottom past the buffer extent
+lat_top    <- 12.5
+lat_bottom <- 11.9
+slope_top    <- (cut_pts$lon[2] - cut_pts$lon[1]) / (cut_pts$lat[2] - cut_pts$lat[1])
 slope_bottom <- (cut_pts$lon[nrow(cut_pts)] - cut_pts$lon[nrow(cut_pts)-1]) /
   (cut_pts$lat[nrow(cut_pts)] - cut_pts$lat[nrow(cut_pts)-1])
 lon_top    <- cut_pts$lon[1] + (lat_top - cut_pts$lat[1]) * slope_top
 lon_bottom <- cut_pts$lon[nrow(cut_pts)] +
   (lat_bottom - cut_pts$lat[nrow(cut_pts)]) * slope_bottom
 
-# Polygon: extrapolated NW corner → cut line going SE → extrapolated SE corner
-# → far east edge → close
-east_edge <- -69.70    # well east of Aruba's east coast + buffer
+# Build polygon: line vertices going down, then east edge, closed
 poly_coords <- cbind(
   object = 1, part = 1,
-  x = c(lon_top, cut_pts$lon, lon_bottom, east_edge, east_edge),
+  x = c(lon_top, cut_pts$lon, lon_bottom, -68.0, -68.0),
   y = c(lat_top, cut_pts$lat, lat_bottom, lat_bottom, lat_top)
 )
 east_keep <- vect(poly_coords, type = "polygons", crs = "EPSG:4326")
@@ -76,12 +74,11 @@ hits <- relate(pts, seaward, "intersects")[, 1]
 buffer_mask <- matrix(hits, nrow = length(lon), ncol = length(lat))
 
 cat("Cells inside 1 km buffer:", sum(buffer_mask), "\n")
-# 1477 for Bonaire vs 1318 for Barbados
+
 # Sanity-check the mask visually (Bonaire-shaped ring should appear)
 image(lon, lat, buffer_mask, asp = 1,
-      main = "Study area for Aruba: 1 km seaward from coast")
-plot(Aruba, add = TRUE, border = "red")
-# sanity-check passed
+      main = "Study area for Bonaire: 1 km seaward from coast")
+plot(bonaire, add = TRUE, border = "red")
 
 # .　 . • ☆ . ° .• °:. *₊ ° . ☆NC.　 . • ☆ . ° .• °:. *₊ ° . ☆
 
@@ -143,6 +140,9 @@ cat("Median coverage on observed days:",
     median(results$coverage_frac[results$n_observed > 0]), "\n")
 
 
+
+
+
 # .　 . • ☆ . ° .• °:. *₊ ° . ☆Look at data.　 . • ☆ . ° .• °:. *₊ ° . ☆
 
 library(ggplot2)
@@ -160,7 +160,7 @@ p_timeline <- ggplot(results, aes(x = date, y = coverage_frac)) +
   geom_col(color = "#91D1C2", linewidth = 0.5) +
   scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
   scale_y_continuous(labels = scales::percent) +
-  labs(title = "% area coverage in Aruba 1 km from coast",
+  labs(title = "% area coverage in Bonaire 1 km from coast",
        x = NULL, y = "% buffer cells with positive FAI") +
   theme_minimal()
 
@@ -269,8 +269,8 @@ r_intensity <- make_rast(mean_intensity_masked)
 
 plot(r_count, main = "Positive detections (count)",
      col = hcl.colors(20, "YlOrRd"))
-plot(Aruba, add = TRUE, border = "black", lwd = 1.2)
+plot(bonaire, add = TRUE, border = "black", lwd = 1.2)
 
 
-write.csv(positive_days, "aruba_coastal_positive_days.csv", row.names=FALSE)
-write.csv(results,       "aruba_coastal_all.csv",       row.names=FALSE)
+write.csv(positive_days, "bonaire_coastal_positive_days.csv", row.names=FALSE)
+write.csv(results,       "bonaire_coastal_all.csv",       row.names=FALSE)

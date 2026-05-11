@@ -3,7 +3,7 @@ library(terra)
 library(sf)
 library(geodata)
 
-nc_path     <- "data/Isolate_max_noob_FAI.nc" 
+nc_path     <- "data/Bonaire_5km.nc" 
 varname_fai <- "nfai_max_isolated"
 varname_obs <- "nfai_max_missing"
 nc <- nc_open(nc_path)
@@ -48,9 +48,8 @@ cat("Cells inside 1 km buffer:", sum(buffer_mask), "\n")
 
 # Sanity-check the mask visually (Bonaire-shaped ring should appear)
 image(lon, lat, buffer_mask, asp = 1,
-      main = "1 km seaward buffer (TRUE cells)")
+      main = "Study area for Bonaire: 1 km seaward from coast, Full coastline")
 plot(bonaire, add = TRUE, border = "red")
-# sanity-check passed
 
 # .　 . • ☆ . ° .• °:. *₊ ° . ☆NC.　 . • ☆ . ° .• °:. *₊ ° . ☆
 
@@ -111,8 +110,7 @@ cat("Total days with any coastal observation:", sum(results$n_observed > 0), "\n
 cat("Median coverage on observed days:",
     median(results$coverage_frac[results$n_observed > 0]), "\n")
 
-# write.csv(positive_days, "bonaire_coastal_positive_days.csv", row.names=FALSE)
-# write.csv(results,       "bonaire_coastal_summary.csv",       row.names=FALSE)
+
 
 # .　 . • ☆ . ° .• °:. *₊ ° . ☆Look at data.　 . • ☆ . ° .• °:. *₊ ° . ☆
 
@@ -124,39 +122,41 @@ positive_days$month_name <- factor(format(positive_days$date, "%b"),
                                    levels = month.abb)
 
 
-# (a) Timeline: each positive day as a tick, colored by intensity
+# (a) Timeline
+
+
 p_timeline <- ggplot(results, aes(x = date, y = coverage_frac)) +
-  geom_area(fill = "darkorange", alpha = 0.4) +
-  geom_line(color = "darkorange", linewidth = 0.3) +
+  geom_col(color = "#91D1C2", linewidth = 0.5) +
   scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
   scale_y_continuous(labels = scales::percent) +
-  labs(title = "Sargassum coverage in Bonaire 5 km coastal buffer",
-       x = NULL, y = "fraction of buffer cells with positive FAI") +
+  labs(title = "% area coverage in Bonaire 1 km from coast",
+       x = NULL, y = "% buffer cells with positive FAI") +
   theme_minimal()
-print(p_timeline)
 
-results$smoothed <- zoo::rollmean(results$coverage_frac, k = 14,
+results$smoothed <- zoo::rollmean(results$coverage_frac, k = 5,
                                   fill = NA, align = "center")
 
-p_timeline + geom_line(aes(y = results$smoothed), color = "firebrick", linewidth = 0.7)
+p_timeline + geom_line(aes(y = results$smoothed), color = "#DC0000", linewidth = 0.7)
 
-results$year <- as.integer(format(results$date, "%Y"))
-results$doy  <- as.integer(format(results$date, "%j"))
+# (aa) Optional: Calendar with days 
 
-p_calendar <- ggplot(results, aes(x = doy, y = factor(year),
-                                  fill = coverage_frac)) +
-  geom_tile() +
-  scale_fill_viridis_c(option = "inferno", direction = -1, na.value = "grey95",
-                       labels = scales::percent,
-                       name = "sargassum\ncoverage") +
-  scale_x_continuous(
-    breaks = c(1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335),
-    labels = month.abb, expand = c(0, 0)) +
-  labs(title = "Daily sargassum coverage in Bonaire coastal buffer",
-       x = NULL, y = NULL) +
-  theme_minimal() +
-  theme(panel.grid = element_blank())
-print(p_calendar)
+# results$year <- as.integer(format(results$date, "%Y"))
+# results$doy  <- as.integer(format(results$date, "%j"))
+# 
+# p_calendar <- ggplot(results, aes(x = doy, y = factor(year),
+#                                   fill = coverage_frac)) +
+#   geom_tile() +
+#   scale_fill_viridis_c(option = "inferno", direction = -1, na.value = "grey95",
+#                        labels = scales::percent,
+#                        name = "sargassum\ncoverage") +
+#   scale_x_continuous(
+#     breaks = c(1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335),
+#     labels = month.abb, expand = c(0, 0)) +
+#   labs(title = "Daily sargassum coverage in Bonaire coastal buffer",
+#        x = NULL, y = NULL) +
+#   theme_minimal() +
+#   theme(panel.grid = element_blank())
+# print(p_calendar)
 
 # (b) Year-month heatmap: shows seasonality + interannual variation at a glance
 ym_counts <- as.data.frame(table(year = positive_days$year,
@@ -168,16 +168,16 @@ p_heatmap <- ggplot(ym_counts, aes(x = month, y = factor(year), fill = Freq)) +
   labs(title = "Positive-FAI days by year and month",
        x = NULL, y = NULL) +
   theme_minimal()
+p_heatmap
 
 # (c) Bar chart of positive days per year
 p_year <- ggplot(positive_days, aes(x = factor(year))) +
-  geom_bar(fill = "steelblue") +
+  geom_bar(fill = "#91D1C2") +
   labs(title = "Positive-FAI days per year", x = "year", y = "days") +
   theme_minimal()
 
-print(p_timeline); print(p_heatmap); print(p_year)
 
-
+p_year
 
 
 
@@ -235,19 +235,10 @@ r_rate      <- make_rast(rate_pos_masked)
 r_intensity <- make_rast(mean_intensity_masked)
 
 # Plot
-par(mfrow = c(1, 3), mar = c(3, 3, 3, 5))
 
 plot(r_count, main = "Positive detections (count)",
      col = hcl.colors(20, "YlOrRd"))
 plot(bonaire, add = TRUE, border = "black", lwd = 1.2)
 
-plot(r_rate, main = "Positive rate (positives / observations)",
-     col = hcl.colors(20, "YlOrRd"))
-plot(bonaire, add = TRUE, border = "black", lwd = 1.2)
 
-plot(r_intensity, main = "Mean FAI when positive",
-     col = hcl.colors(20, "YlOrRd"))
-plot(bonaire, add = TRUE, border = "black", lwd = 1.2)
-
-par(mfrow = c(1, 1))
 
