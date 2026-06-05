@@ -3,6 +3,19 @@ library(terra)
 library(sf)
 library(geodata)
 
+# Label connected patches on a logical matrix oriented [n_lon × n_lat].
+# Returns an integer matrix of patch IDs in the same orientation (NA = background).
+label_patches <- function(mask_mat, lon, lat) {
+  r <- rast(t(mask_mat)[length(lat):1, ],
+            extent = ext(min(lon), max(lon), min(lat), max(lat)),
+            crs = "EPSG:4326")
+  r[r == 0] <- NA
+  p <- patches(r, directions = 8, zeroAsNA = TRUE)
+  p_mat <- matrix(values(p), nrow = length(lat), ncol = length(lon), byrow = TRUE)
+  p_mat <- p_mat[length(lat):1, ]   # undo the lat flip
+  t(p_mat)                          # undo the transpose → [n_lon × n_lat]
+}
+
 nc_path     <- "data/Bonaire_5km.nc" 
 varname_fai <- "nfai_max_isolated"
 varname_obs <- "nfai_max_missing"
@@ -111,6 +124,23 @@ for (t in seq_len(n_time)) {
   fai_in_scope <- fai_slice
   fai_in_scope[!in_scope] <- NA
   
+  pos_mask <- !is.na(fai_in_scope) & fai_in_scope > 0
+  
+  if (any(pos_mask)) {
+    patch_ids <- label_patches(pos_mask, lon, lat)
+    sizes     <- table(patch_ids)
+    big_ids   <- as.integer(names(sizes)[sizes > 2])   # >2 connected pixels
+    big_mask  <- !is.na(patch_ids) & patch_ids %in% big_ids
+    
+    n_positive[t] <- sum(big_mask)
+    max_fai[t]    <- if (n_positive[t] > 0) max(fai_in_scope[big_mask], na.rm = TRUE) else NA
+  } else {
+    n_positive[t] <- 0
+    max_fai[t]    <- NA
+  }
+  
+  n_observed[t] <- sum(in_scope)
+  
   max_fai[t]    <- suppressWarnings(max(fai_in_scope, na.rm = TRUE))
   n_positive[t] <- sum(fai_in_scope > 0, na.rm = TRUE)
   n_observed[t] <- sum(in_scope)
@@ -129,10 +159,32 @@ results <- data.frame(
   coverage_frac = n_observed / n_buffer_cells # how much of the coastal area are covered?
 )
 
-positive_days <- subset(
-  results,
-  !is.na(max_fai) & max_fai > 0 # does not make sense to have a coverage filter: very small coverage
-)
+positive_days <- subset(results, !is.na(max_fai) & max_fai > 0 & n_positive > 0)
+positive_days <- positive_days[order(positive_days$date), ]
+
+# Require at least one other qualifying detection within ±10 days.
+# 10-day window = one Sentinel-2 revisit (5 d) + one cloud-missed acquisition.
+gap_back <- c(Inf, as.numeric(diff(positive_days$date)))
+gap_fwd  <- c(as.numeric(diff(positive_days$date)), Inf)
+positive_days <- positive_days[gap_back <= 10 | gap_fwd <= 10, ]
+
+# Group surviving detections into events
+positive_days$event_id <- cumsum(c(1, as.numeric(diff(positive_days$date)) > 10))
+
+events <- do.call(rbind, lapply(split(positive_days, positive_days$event_id), function(x) {
+  data.frame(
+    event_id      = unique(x$event_id),
+    start         = min(x$date),
+    end           = max(x$date),
+    n_obs         = nrow(x),
+    duration_days = as.integer(max(x$date) - min(x$date)) + 1,
+    peak_fai      = max(x$max_fai),
+    peak_pixels   = max(x$n_positive)
+  )
+}))
+
+cat("Events after filtering:", nrow(events), "\n")
+cat("Median event duration (days):", median(events$duration_days), "\n")
 
 cat("Coastal positive-FAI days:", nrow(positive_days), "\n")
 cat("Total days with any coastal observation:", sum(results$n_observed > 0), "\n")
