@@ -132,7 +132,7 @@ results <- data.frame(
   max_fai       = max_fai,
   n_positive    = n_positive,
   n_observed    = n_observed,
-  coverage_frac = n_observed / n_buffer_cells # how much of the coastal area are covered?
+  coverage_frac = n_positive / n_buffer_cells # how much of the coastal area are covered?
 )
 
 positive_days <- subset(results, !is.na(max_fai) & max_fai > 0 & n_positive > 0)

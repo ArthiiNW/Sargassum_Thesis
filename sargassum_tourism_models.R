@@ -148,6 +148,77 @@ plot(panel_m$ym, panel_m$av_arr, type = "l", main = "Aviation arrivals",
 par(mfrow = c(1, 1))
 
 
+panel_m %>%
+  ggplot(aes(x = y_n)) + geom_histogram(bins = 30) + theme_bw() + 
+  labs(x = "Monthly count of yacht", y = NULL)
+
+panel_m %>%
+  ggplot(aes(x = y_moor)) + geom_histogram(bins = 30) + theme_bw()+ 
+  labs(x = "Monthly average of yacht mooring days", y = NULL)
+
+panel_m %>%
+  ggplot(aes(x = av_arr)) + geom_histogram(bins = 30) + theme_bw()+ 
+  labs(x = "Monthly count of passengers arriving by flight", y = NULL)
+
+panel_m %>%
+  ggplot(aes(x = cr_pax)) + geom_histogram(bins = 30) + theme_bw()+ 
+  labs(x = "Monthly count of passengers arriving by cruise ship", y = NULL)
+
+
+library(AER)
+rd <- glm(y_n ~ ., data = panel_m, family = poisson)
+dispersiontest(rd,trafo=1)
+rd <- glm(y_moor ~ ., data = panel_m, family = poisson)
+dispersiontest(rd,trafo=1)
+rd <- glm(av_arr ~ ., data = panel_m, family = poisson)
+dispersiontest(rd,trafo=1)
+rd <- glm(cr_pax ~ ., data = panel_m, family = poisson)
+dispersiontest(rd,trafo=1)
+
+panel_m$cr_pax<-panel_m$cr_pax*1000
+
+
+# .　 . • ☆ . ° .• °:. *₊ ° . ☆ autocorrelation.　 . • ☆ . ° .• °:. *₊ ° . ☆
+
+# ---- 1. Define the grid. EDIT to match your column names in panel_m ----
+outcomes <- c(
+  "Yacht mooring days" = "log(y_moor)",
+  "Yacht count"        = "y_n",
+  "Cruise passengers"  = "log(cr_pax+1)",
+  "Aviation arrivals"  = "log(av_arr)"
+)
+exposures <- c(
+  "Peak coverage"  = "peak_cov",
+  "Days in event"  = "days_evt",
+  "Mean intensity" = "intensity"
+)
+
+# ---- 2. Fit every model, collect residuals vs the exposure regressor ----
+resid_long <- do.call(rbind, lapply(names(outcomes), function(oc) {
+  do.call(rbind, lapply(names(exposures), function(ex) {
+    f  <- reformulate(c(exposures[[ex]], "month_f", "year_f"),
+                      response = outcomes[[oc]])
+    m  <- lm(f, data = panel_m)
+    mf <- model.frame(m)                 # rows actually used (NA-safe)
+    data.frame(outcome = oc, exposure = ex,
+               xval = mf[[exposures[[ex]]]], resi = resid(m))
+  }))
+}))
+resid_long$outcome  <- factor(resid_long$outcome,  levels = names(outcomes))
+resid_long$exposure <- factor(resid_long$exposure, levels = names(exposures))
+
+# ---- 3. 12-panel residuals-vs-exposure grid ----
+p_grid <- ggplot(resid_long, aes(xval, resi)) +
+  geom_hline(yintercept = 0, colour = "grey40") +
+  geom_point(colour = "blue", alpha = 0.55, size = 1.3) +
+  facet_grid(outcome ~ exposure, scales = "free") +
+  labs(x = "Exposure metric value", y = "OLS residual") +
+  theme_bw(base_size = 10)
+
+p_grid
+ggsave("appendix_resid_grid.pdf", p_grid, width = 9, height = 11, units = "in")
+
+
 # .　 . • ☆ . ° .• °:. *₊ ° . ☆ MAIN MODELS: Year FE control .　 . • ☆ . ° .• °:. *₊ ° . ☆
 
 models <- list(

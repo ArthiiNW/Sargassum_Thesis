@@ -148,6 +148,35 @@ p_yoy_avi <- ggplot(yearly_avi, aes(year, yoy, fill = yoy > 0)) +
   labs(title = "Bonaire arrivals -- year-over-year change", x = NULL, y = "YoY %")
 print(p_yoy_avi); save_plot(p_yoy_avi, "02e_aviation_yoy", w = 7, h = 4)
 
+# --- FIGURE 4A ----------
+p_avi_arr_figure4a <- avi_m |>
+  filter(airport != "Totaal Caribisch Nederland") |>
+  filter(airport == "Flamingo Airport (Bonaire)") |>
+  filter(year>=2022) |>
+  ggplot(aes(date, AangekomenPassagiers_3)) +
+  geom_line() +
+  scale_y_continuous(labels = label_comma()) +
+  labs(title = "Arriving passengers by airport (monthly, 82332NED)",
+       x = NULL, y = "passengers", colour = NULL)
+print(p_avi_arr); save_plot(p_avi_arr, "02a_aviation_arrivals_by_airport")
+
+# --- 2d. Annual seasonal profile ------------------------------------------
+season_avi <- bonaire_avi |>
+  filter(year>=2022) |>
+  group_by(month) |>
+  summarise(mean_arr = mean(AangekomenPassagiers_3, na.rm = TRUE),
+            sd_arr = sd(AangekomenPassagiers_3, na.rm = TRUE),
+            .groups = "drop")
+p_season_avi <- ggplot(season_avi, aes(month, mean_arr)) +
+  geom_ribbon(aes(ymin = mean_arr - sd_arr, ymax = mean_arr + sd_arr),
+              fill = "lightblue", alpha = 0.4) +
+  geom_line(linewidth = 1, colour = "#2E5C8A") +
+  geom_point(colour = "#2E5C8A") +
+  scale_x_continuous(breaks = 1:12) +
+  scale_y_continuous(labels = label_comma()) +
+  labs(title = "Bonaire arriving passengers -- seasonal mean ± SD",
+       x = "month", y = "mean passengers")
+print(p_season_avi); save_plot(p_season_avi, "02d_aviation_seasonality", w = 7, h = 4)
 
 # ============================================================================
 # 3. TOURISM BY PLANE  83104NED  -- monthly, in thousands, by island
@@ -395,6 +424,32 @@ yearly_cru <- cru_m |>
   filter(n_months == 12)
 print(yearly_cru)
 
+# --- FIGURE 4B ---------------------------------------------------
+p_cruise <- cru_m |>
+  filter(year>= 2022) |>
+  ggplot(aes(date, passengers)) +
+  geom_line(colour = "#7B3F9C", linewidth = 0.7) +
+  scale_y_continuous(labels = label_comma()) +
+  labs(title = "Cruise passengers, monthly (85007NED)",
+       x = NULL, y = "passengers")
+print(p_cruise)
+
+# --- FIGURE 5B ------------------------------------------------------
+season_cru <- cru_m |>
+  filter(year >= 2022) |>      # exclude COVID dip for cleaner pattern
+  group_by(month) |>
+  summarise(mean_pax = mean(passengers, na.rm = TRUE),
+            sd_pax   = sd(passengers, na.rm = TRUE))
+p_cru_season <- ggplot(season_cru, aes(month, mean_pax)) +
+  geom_ribbon(aes(ymin = mean_pax - sd_pax, ymax = mean_pax + sd_pax),
+              fill = "#DABFEF", alpha = 0.5) +
+  geom_line(linewidth = 1, colour = "#7B3F9C") +
+  geom_point(colour = "#7B3F9C") +
+  scale_x_continuous(breaks = 1:12) +
+  scale_y_continuous(labels = label_comma()) +
+  labs(title = "Cruise passengers -- seasonal mean ± SD (excl. 2020-2022)",
+       x = "month", y = "mean passengers")
+print(p_cru_season)
 
 # ============================================================================
 # 7. YACHTS  85015NED  -- monthly, Bonaire-only
@@ -443,7 +498,54 @@ p_yacht_season <- ggplot(season_yacht, aes(month, mean_pax)) +
        x = "month", y = "mean passengers")
 print(p_yacht_season); save_plot(p_yacht_season, "07c_yachts_seasonality", w = 7, h = 4)
 
+# --- Figure 4C --------------
+yacht_long <- yacht_m |>
+  pivot_longer(c(Jachten_2, GemiddeldAantalLigdagen_3),
+               names_to = "series", values_to = "value") |>
+  filter(year>=2022)
 
+p_yacht <- ggplot(yacht_long, aes(date, value)) +
+  geom_line(colour = "#117A65") +
+  facet_wrap(~ series, scales = "free_y", ncol = 1) +
+  labs(title = "Yachts: passengers, # yachts, mean mooring days (85015NED)",
+       x = NULL, y = NULL)
+print(p_yacht)
+
+
+
+# --- Figure 5c ----------------------------------
+season_yacht <- yacht_m |>
+  filter(year >= 2022) |>
+  group_by(month) |>
+  summarise(mean_pax = mean(Jachten_2, na.rm = TRUE),
+            sd_pax   = sd(Jachten_2, na.rm = TRUE))
+
+p_yacht_season <- ggplot(season_yacht, aes(month, mean_pax)) +
+  geom_ribbon(aes(ymin = mean_pax - sd_pax, ymax = mean_pax + sd_pax),
+              fill = "#97d1c5", alpha = 0.5)+
+  geom_line(color = "#117A65") +
+  geom_point(colour = "#117A65")+
+  scale_x_continuous(breaks = 1:12) +
+  labs(title = "Yacht passengers -- average by month-of-year (excl. COVID)",
+       x = "month", y = "mean count of yachts")
+print(p_yacht_season)
+
+
+season_yacht <- yacht_m |>
+  filter(year >= 2022) |>
+  group_by(month) |>
+  summarise(mean_pax = mean(GemiddeldAantalLigdagen_3, na.rm = TRUE),
+            sd_pax   = sd(GemiddeldAantalLigdagen_3, na.rm = TRUE))
+
+p_yacht_season <- ggplot(season_yacht, aes(month, mean_pax)) +
+  geom_ribbon(aes(ymin = mean_pax - sd_pax, ymax = mean_pax + sd_pax),
+              fill = "#97d1c5", alpha = 0.5)+
+  geom_line(color = "#117A65") +
+  geom_point(colour = "#117A65")+
+  scale_x_continuous(breaks = 1:12) +
+  labs(title = "Yacht passengers -- average by month-of-year (excl. COVID)",
+       x = "month", y = "mean mooring days")
+print(p_yacht_season)
 # ============================================================================
 # 8. JOINT VIEW: Bonaire tourism dashboard (monthly, 2012+)
 # ============================================================================
@@ -575,3 +677,6 @@ write_csv(vps_clean,     "eda/value_per_sector_bonaire.csv")
 write_csv(recovery,      "eda/recovery_table.csv")
 
 cat("\nDone. Open eda/figures/ for plots and eda/*.csv for cleaned tables.\n")
+
+
+
