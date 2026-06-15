@@ -259,73 +259,18 @@ coef_map <- c(
 
 # One table per outcome keeps each one readable (3 cols instead of 12).
 outcomes <- c("Mooring", "YachtN", "Cruise", "Avion")
-models %>% modelsummary(
-    vcov = vcov_list,
+for (oc in outcomes) {
+  idx <- grep(paste0("^", oc), names(models))
+  modelsummary(
+    models[idx],
+    vcov = vcov_list[idx],
     coef_map = coef_map,
     coef_omit = "month_f|year_f|Intercept|theta",
     stars = c("*" = 0.1, "**" = 0.05, "***" = 0.01),
     gof_omit = "AIC|BIC|RMSE|Log.Lik|F",
     notes = "HAC (Newey-West, lag 3) standard errors. Month-of-year and year FE included.",
-    title = paste0("Sargassum effect on everything")
-  )
-
-
-library(kableExtra)
-coef_map <- c(
-  "intensity" = "Sargassum",
-  "days_evt"  = "Sargassum",
-  "peak_cov"  = "Sargassum"
-)
-
-# GOF rows: n, R^2, adjusted R^2, residual SE with df
-# Note: glm.nb does not produce R^2 / residual SE -- those cells will be blank,
-# which is the conventional behavior in modelsummary tables.
-gof_custom <- tibble::tribble(
-  ~raw,           ~clean,             ~fmt,
-  "nobs",         "Observations",     0,
-  "r.squared",    "R\\textsuperscript{2}",         3,
-  "adj.r.squared","Adjusted R\\textsuperscript{2}", 3,
-  "sigma",        "Residual SE",      3,
-  "df.residual",  "Residual df",      0
-)
-
-# Column labels for the three exposure specs
-spec_names <- c("(1) Intensity", "(2) Days in event", "(3) Peak coverage")
-
-outcomes <- c(
-  "Mooring" = "Yacht mooring days",
-  "YachtN"  = "Yacht count",
-  "Cruise"  = "Cruise passengers",
-  "Avion"   = "Aviation arrivals"
-)
-
-for (oc in names(outcomes)) {
-  idx <- grep(paste0("^", oc), names(models))
-  mods <- setNames(models[idx], spec_names)
-  vcv  <- setNames(vcov_list[idx], spec_names)
-  
-  modelsummary(
-    mods,
-    vcov       = vcv,
-    coef_map   = coef_map,
-    coef_omit  = "month_f|year_f|Intercept|theta",
-    stars      = c("*" = 0.1, "**" = 0.05, "***" = 0.01),
-    gof_map    = gof_custom,
-    fmt        = 3,
-    escape     = FALSE,
-    title      = paste0("Effect of sargassum exposure on ", outcomes[oc],
-                        ". \\label{tab:", tolower(oc), "}"),
-    notes      = list(
-      "HAC (Newey-West, lag 3) standard errors in parentheses.",
-      "All models include month-of-year and year fixed effects.",
-      paste0(
-        if (oc == "YachtN") "Negative binomial with log link."
-        else if (oc == "Cruise") "OLS with log(y + 1)."
-        else "OLS with log(y)."
-      ),
-      "* p<0.1, ** p<0.05, *** p<0.01."
-    ),
-    output     = paste0("table_", tolower(oc), ".tex")
+    title = paste0("Sargassum effect on ", oc),
+    output = paste0("table_", tolower(oc), ".docx")
   )
 }
 

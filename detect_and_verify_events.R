@@ -196,6 +196,9 @@ plot_island <- function(island_name, all_csv_path, events, obs_all) {
 obs_all      <- read.csv("OBSdata/all_observations.csv")
 obs_all$date <- as.Date(obs_all$date)
 
+obs_all <- obs_all |>
+  filter(year >= 2022)
+
 bonaire_events  <- run_island("Bonaire",
                               "sargassum_csvs/bonaire_coastal_positive_days.csv",  obs_all)
 barbados_events <- run_island("Barbados",

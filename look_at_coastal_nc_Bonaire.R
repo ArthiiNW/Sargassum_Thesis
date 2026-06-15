@@ -240,10 +240,12 @@ p_timeline + geom_line(aes(y = results$smoothed), color = "#DC0000", linewidth =
 #   theme_minimal() +
 #   theme(panel.grid = element_blank())
 # print(p_calendar)
+#positive_days<-bonaire_coastal_positive_days |>
+#  filter(year>=2022)
 
 # (b) Year-month heatmap: shows seasonality + interannual variation at a glance
 ym_counts <- as.data.frame(table(year = positive_days$year,
-                                 month = positive_days$month_name))
+                                 month = positive_days$month))
 p_heatmap <- ggplot(ym_counts, aes(x = month, y = factor(year), fill = Freq)) +
   geom_tile(color = "white") +
   scale_fill_viridis_c(option = "mako", direction = -1,

@@ -96,7 +96,7 @@ yacht <- read.csv("cbs_raw/85015NED.csv", stringsAsFactors = FALSE) %>%
 # preserves the contrast between non-event and event months.
 
 panel <- yacht %>%
-  filter(year >= 2021, year <= 2025) %>%
+  filter(year >= 2022, year <= 2025) %>%
   left_join(bon_sarg, by = c("year", "month")) %>%
   left_join(bar_sarg, by = c("year", "month")) %>%
   mutate(across(c(bon_event_days, bon_peak_cov, bon_mean_cov,
@@ -113,7 +113,7 @@ panel <- yacht %>%
     log_mooring = log(mooring),
     month_f   = factor(month),                 # month-of-year fixed effects
     year_f    = factor(year),                  # year fixed effects (robustness)
-    t         = (year - 2021) * 12 + month     # linear trend (robustness)
+    t         = (year - 2022) * 12 + month     # linear trend (robustness)
   )
 
 cat("Panel:", nrow(panel), "months,", min(panel$year), "-", max(panel$year), "\n")
@@ -199,45 +199,47 @@ report("B  gap mean_cov  + year FE",   mB_moor_mean)
 # -----------------------------------------------------------------------------
 # 8. Tidy comparison tables (one per outcome; HAC SEs)
 # -----------------------------------------------------------------------------
-library(flextable)   # modelsummary uses this for Word output (pulls in officer)
 
-ms_ft <- function(mods, title) {
-  modelsummary(
-    mods,
-    vcov     = lapply(mods, function(m) NeweyWest(m, lag = 3, prewhite = FALSE)),
-    coef_map = gap_map,
-    gof_omit = "AIC|BIC|Log.Lik|RMSE",
-    stars    = c("*" = .05, "**" = .01, "***" = .001),
-    title    = title,
-    notes    = paste("Relative gap = Barbados minus Bonaire (detected_events.csv).",
-                     "Month-of-year FE in all columns; B adds year FE.",
-                     "Newey-West HAC SE, lag 3."),
-    output   = "flextable"
-  )
-}
+library(modelsummary)
 
-ft_count <- ms_ft(
-  list("A: event days"       = mA_cnt_days$model,
-       "A: peak cov"         = mA_cnt_peak$model,
-       "A: mean cov"         = mA_cnt_mean$model,
-       "B: event days +yrFE" = mB_cnt_days$model,
-       "B: peak cov +yrFE"   = mB_cnt_peak$model,
-       "B: mean cov +yrFE"   = mB_cnt_mean$model),
-  "Table X. Displacement test - yacht count (negative binomial, HAC lag 3)"
+# --- Table 1: month FE only ---
+mods_monthFE <- list(
+  "Event days" = mA_cnt_days$model,
+  "Peak cov"   = mA_cnt_peak$model,
+  "Mean cov"   = mA_cnt_mean$model
+)
+# Coefficient labels for the gap terms (used by both tables)
+gap_map <- c(
+  gap_event_days = "Relative gap (event days)",
+  gap_peak_cov   = "Relative gap (peak coverage)",
+  gap_mean_cov   = "Relative gap (mean coverage)"
+)
+modelsummary(
+  mods_monthFE,
+  vcov     = lapply(mods_monthFE, function(m) NeweyWest(m, lag = 3, prewhite = FALSE)),
+  coef_map = gap_map,
+  gof_omit = "AIC|BIC|Log.Lik|RMSE",
+  stars    = c("*" = .05, "**" = .01, "***" = .001),
+  title    = "Yacht count and relative regional sargassum - month FE (negative binomial, HAC lag 3)",
+  notes    = paste("Relative gap = Barbados minus Bonaire (detected_events.csv).",
+                   "Month-of-year fixed effects. Newey-West HAC SE, lag 3."),
+  output   = "table_yachtcount_monthFE.docx"
 )
 
-ft_moor <- ms_ft(
-  list("A: event days"       = mA_moor_days$model,
-       "A: peak cov"         = mA_moor_peak$model,
-       "A: mean cov"         = mA_moor_mean$model,
-       "B: event days +yrFE" = mB_moor_days$model,
-       "B: peak cov +yrFE"   = mB_moor_peak$model,
-       "B: mean cov +yrFE"   = mB_moor_mean$model),
-  "Table Y. Displacement test - log mooring days (OLS, HAC lag 3)"
+# --- Table 2: month + year FE ---
+mods_yearFE <- list(
+  "Event days" = mB_cnt_days$model,
+  "Peak cov"   = mB_cnt_peak$model,
+  "Mean cov"   = mB_cnt_mean$model
 )
-
-# Both tables, each with its caption, in one .docx (written to getwd())
-save_as_docx(
-  `Yacht count (negative binomial)` = ft_count,
-  `Mooring days (log-linear OLS)`   = ft_moor,
-  path = "table_displacement.docx")
+modelsummary(
+  mods_yearFE,
+  vcov     = lapply(mods_yearFE, function(m) NeweyWest(m, lag = 3, prewhite = FALSE)),
+  coef_map = gap_map,
+  gof_omit = "AIC|BIC|Log.Lik|RMSE",
+  stars    = c("*" = .05, "**" = .01, "***" = .001),
+  title    = "Yacht count and relative regional sargassum - month + year FE (negative binomial, HAC lag 3)",
+  notes    = paste("Relative gap = Barbados minus Bonaire (detected_events.csv).",
+                   "Month-of-year and year fixed effects. Newey-West HAC SE, lag 3."),
+  output   = "table_yachtcount_yearFE.docx"
+)
